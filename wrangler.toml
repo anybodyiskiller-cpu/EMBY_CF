@@ -10,7 +10,3 @@ BASE_DOMAIN = "anybodyiskiller.shop"
 binding = "DB"
 database_name = "media-store"
 database_id = "dfff5cd4-1df8-4b31-b9f8-d48bd9729566"
-
-[[routes]]
-pattern = "media.anybodyiskiller.shop"
-custom_domain = true

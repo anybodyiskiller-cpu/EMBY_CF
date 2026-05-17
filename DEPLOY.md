@@ -13,6 +13,8 @@ The workflow expects these repository secrets:
 
 `ADMIN_TOKEN` is stored on Cloudflare as a Worker secret and is preserved by `wrangler deploy --keep-vars`.
 
+The custom domain `media.anybodyiskiller.shop` is already bound in Cloudflare. It is intentionally not declared in `wrangler.toml` for GitHub Actions, because the existing API token can deploy Worker scripts but cannot update zone routes.
+
 ## Cloudflare Configuration
 
 The deployment target is defined in `wrangler.toml`:
@@ -30,10 +32,6 @@ BASE_DOMAIN = "anybodyiskiller.shop"
 binding = "DB"
 database_name = "media-store"
 database_id = "dfff5cd4-1df8-4b31-b9f8-d48bd9729566"
-
-[[routes]]
-pattern = "media.anybodyiskiller.shop"
-custom_domain = true
 ```
 
 ## Manual Deploy

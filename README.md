@@ -15,7 +15,7 @@ Cloudflare Workers media gateway deployed as `media-gate`.
 - Worker: `media-gate`
 - D1 database: `media-store`
 - D1 binding: `DB`
-- Custom domain: `media.anybodyiskiller.shop`
+- Custom domain: `media.anybodyiskiller.shop` (already bound in Cloudflare)
 - Admin secret binding: `ADMIN_TOKEN`
 
 ## Automatic Deploy
@@ -25,7 +25,7 @@ GitHub Actions deploys on every push to `main` or `master` using:
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-The workflow runs `wrangler deploy --keep-vars`, so existing Cloudflare secrets such as `ADMIN_TOKEN` are preserved.
+The workflow runs `wrangler deploy --keep-vars`, so existing Cloudflare secrets such as `ADMIN_TOKEN` are preserved. The custom domain is not managed by Actions because the existing API token can deploy Workers but cannot update zone routes.
 
 ## Current Routes
 
