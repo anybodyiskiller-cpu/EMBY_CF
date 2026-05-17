@@ -452,6 +452,32 @@ function normalizeAlias(a) {
   return String(a || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
 }
 
+function rewriteJsonUrls(value, upstreamOrigin, proxyBase) {
+  let modified = false;
+
+  function walk(item) {
+    if (typeof item === 'string') {
+      if (item.startsWith(upstreamOrigin)) {
+        modified = true;
+        return proxyBase + item.slice(upstreamOrigin.length);
+      }
+      return item;
+    }
+    if (Array.isArray(item)) {
+      return item.map(walk);
+    }
+    if (item && typeof item === 'object') {
+      Object.keys(item).forEach((key) => {
+        item[key] = walk(item[key]);
+      });
+      return item;
+    }
+    return item;
+  }
+
+  return { data: walk(value), modified };
+}
+
 async function proxyDirectUrl(request, env, ctx, upstreamUrls, opts = {}) {
   const { enableCache = true, compatMode = false, matchedPrefix = null, needsSpeedTest = false } = opts;
   const proxyOrigin = new URL(request.url).origin;
@@ -610,35 +636,40 @@ async function proxyDirectUrl(request, env, ctx, upstreamUrls, opts = {}) {
 
   if (!compatMode && finalResponse.status === 200 && contentType.includes('json') && matchedPrefix) {
     const urlPath = lastUpstreamUrl.pathname.toLowerCase();
-    if (urlPath.includes('playbackinfo')) {
-      try {
-        const data = await finalResponse.clone().json();
-        let modified = false;
-        if (data?.MediaSources) {
-          data.MediaSources.forEach((source) => {
-            ['DirectStreamUrl', 'TranscodingUrl'].forEach((key) => {
-              if (source[key]?.startsWith('http')) {
-                try {
-                  const mediaUrl = new URL(source[key]);
-                  const isDirectDomain = MANUAL_REDIRECT_DOMAINS.some(d => mediaUrl.hostname.endsWith(d));
-                  if (!isDirectDomain) {
-                    source[key] = proxyOrigin + safePrefix + '/' + source[key];
-                    modified = true;
-                  }
-                } catch (_) {
+    try {
+      const data = await finalResponse.clone().json();
+      let modified = false;
+      const proxyBase = proxyOrigin + safePrefix;
+
+      const httpRewrite = rewriteJsonUrls(data, lastUpstreamUrl.origin.replace(/^https:/, 'http:'), proxyBase);
+      const httpsRewrite = rewriteJsonUrls(httpRewrite.data, lastUpstreamUrl.origin.replace(/^http:/, 'https:'), proxyBase);
+      modified = httpRewrite.modified || httpsRewrite.modified;
+
+      if (urlPath.includes('playbackinfo') && data?.MediaSources) {
+        data.MediaSources.forEach((source) => {
+          ['DirectStreamUrl', 'TranscodingUrl'].forEach((key) => {
+            if (source[key]?.startsWith('http')) {
+              try {
+                const mediaUrl = new URL(source[key]);
+                const isDirectDomain = MANUAL_REDIRECT_DOMAINS.some(d => mediaUrl.hostname.endsWith(d));
+                if (!isDirectDomain) {
                   source[key] = proxyOrigin + safePrefix + '/' + source[key];
                   modified = true;
                 }
+              } catch (_) {
+                source[key] = proxyOrigin + safePrefix + '/' + source[key];
+                modified = true;
               }
-            });
+            }
           });
-        }
-        if (modified) {
-          responseHeaders.delete('Content-Length');
-          return new Response(JSON.stringify(data), { status: finalResponse.status, headers: responseHeaders });
-        }
-      } catch (_) {}
-    }
+        });
+      }
+
+      if (modified) {
+        responseHeaders.delete('Content-Length');
+        return new Response(JSON.stringify(data), { status: finalResponse.status, headers: responseHeaders });
+      }
+    } catch (_) {}
   }
 
   if (!compatMode && finalResponse.status === 200 && matchedPrefix) {
