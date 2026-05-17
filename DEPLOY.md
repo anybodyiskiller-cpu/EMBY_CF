@@ -45,9 +45,3 @@ npx wrangler deploy --keep-vars
 ```bash
 curl https://media.anybodyiskiller.shop/health
 ```
-
-Expected result:
-
-```json
-{"status":"ok"}
-```

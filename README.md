@@ -27,6 +27,10 @@ GitHub Actions deploys on every push to `main` or `master` using:
 
 The workflow runs `wrangler deploy --keep-vars`, so existing Cloudflare secrets such as `ADMIN_TOKEN` are preserved. The custom domain is not managed by Actions because the existing API token can deploy Workers but cannot update zone routes.
 
+## Upstream Sync
+
+`.github/workflows/sync-upstream.yml` checks `Dirige/EMBY_CF` every 6 hours. When upstream changes, it refreshes `worker.js`, reapplies the local media-gate patches, commits the result, and lets the deploy workflow publish it.
+
 ## Current Routes
 
 Routes are stored in D1 and managed from `/admin`.
