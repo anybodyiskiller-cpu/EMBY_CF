@@ -1,0 +1,41 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.repository == 'anybodyiskiller-cpu/EMBY_CF'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync from upstream and reapply local patches
+        run: node scripts/sync-upstream.js
+
+      - name: Check generated worker syntax
+        run: node --check worker.js
+
+      - name: Commit upstream sync
+        run: |
+          if git diff --quiet; then
+            echo "No upstream changes to sync."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker.js README.md DEPLOY.md wrangler.toml
+          git commit -m "Sync upstream EMBY_CF"
+          git push
