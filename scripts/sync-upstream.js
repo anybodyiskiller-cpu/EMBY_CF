@@ -2,49 +2,6 @@ const fs = require('node:fs/promises');
 
 const upstreamBase = 'https://raw.githubusercontent.com/Dirige/EMBY_CF/main';
 
-const localReadme = `# Media Gateway
-
-Cloudflare Workers media gateway deployed as \`media-gate\`.
-
-## Live URLs
-
-- Home: \`https://media.anybodyiskiller.shop/\`
-- Admin: \`https://media.anybodyiskiller.shop/admin\`
-- Health: \`https://media.anybodyiskiller.shop/health\`
-- UHD route: \`https://media.anybodyiskiller.shop/uhd\`
-- Global route: \`https://media.anybodyiskiller.shop/global\`
-
-## Cloudflare Resources
-
-- Worker: \`media-gate\`
-- D1 database: \`media-store\`
-- D1 binding: \`DB\`
-- Custom domain: \`media.anybodyiskiller.shop\` (already bound in Cloudflare)
-- Admin secret binding: \`ADMIN_TOKEN\`
-
-## Automatic Deploy
-
-GitHub Actions deploys on every push to \`main\` or \`master\` using:
-
-- \`CLOUDFLARE_API_TOKEN\`
-- \`CLOUDFLARE_ACCOUNT_ID\`
-
-The workflow runs \`wrangler deploy --keep-vars\`, so existing Cloudflare secrets such as \`ADMIN_TOKEN\` are preserved. The custom domain is not managed by Actions because the existing API token can deploy Workers but cannot update zone routes.
-
-## Upstream Sync
-
-\`.github/workflows/sync-upstream.yml\` checks \`Dirige/EMBY_CF\` every 6 hours. When upstream changes, it refreshes \`worker.js\`, reapplies the local media-gate patches, commits the result, and lets the deploy workflow publish it.
-
-## Current Routes
-
-Routes are stored in D1 and managed from \`/admin\`.
-
-| Prefix | Target |
-| --- | --- |
-| \`uhd\` | \`https://global.uhdnow.com\` |
-| \`global\` | \`https://global.uhdnow.com\` |
-`;
-
 const localDeploy = `# Deploy
 
 This repository deploys \`media-gate\` automatically with GitHub Actions.
@@ -287,8 +244,9 @@ function patchWorker(source) {
 
 async function main() {
   const upstreamWorker = await fetchText('worker.js');
+  const upstreamReadme = await fetchText('README.md');
   await fs.writeFile('worker.js', patchWorker(upstreamWorker));
-  await fs.writeFile('README.md', localReadme);
+  await fs.writeFile('README.md', upstreamReadme);
   await fs.writeFile('DEPLOY.md', localDeploy);
   await fs.writeFile('wrangler.toml', localWrangler);
 }
