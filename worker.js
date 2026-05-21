@@ -36,6 +36,8 @@ const CONFIG = {
   enableStats: true,
 };
 
+const IMAGE_CACHE_TTL_SECONDS = 24 * 60 * 60;
+
 const CORS_JSON = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' };
 
 let dbReady = false;
@@ -99,6 +101,17 @@ function getClientCacheKey(request) {
   if (ip.includes('.')) ipKey = ip.split('.').slice(0, 3).join('.');
   else if (ip.includes(':')) ipKey = ip.split(':').slice(0, 4).join(':');
   return `${cf.country || 'XX'}|${cf.city || ''}|${cf.asn || ''}|${ipKey}`;
+}
+
+function isCacheableImageRequest(request, upstreamUrl) {
+  if (request.method !== 'GET') return false;
+  const path = upstreamUrl.pathname.toLowerCase();
+  return path.includes('/images/') || path.endsWith('/image');
+}
+
+function buildImageCacheKey(request) {
+  const url = new URL(request.url);
+  return new Request(url.toString(), { method: 'GET' });
 }
 
 function latencyStatus(ms) {
@@ -595,9 +608,27 @@ async function proxyDirectUrl(request, env, ctx, upstreamUrls, opts = {}) {
 
   const isPlaybackInfo = /\/PlaybackInfo/i.test(firstUpstreamUrl.pathname);
   const isPlaying = firstUpstreamUrl.pathname.endsWith('/Sessions/Playing');
+  const shouldCacheImage = enableCache && isCacheableImageRequest(request, firstUpstreamUrl);
+  const imageCacheKey = shouldCacheImage ? buildImageCacheKey(request) : null;
 
   if (isPlaying && CONFIG.enableStats) ctx.waitUntil(recordStats(env, 'playing'));
   if (isPlaybackInfo) ctx.waitUntil(recordStats(env, 'playback_info'));
+
+  if (imageCacheKey) {
+    const cachedImage = await caches.default.match(imageCacheKey);
+    if (cachedImage) {
+      const cachedHeaders = new Headers(cachedImage.headers);
+      cachedHeaders.set('Access-Control-Allow-Origin', '*');
+      cachedHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      cachedHeaders.set('Access-Control-Allow-Headers', '*');
+      cachedHeaders.set('X-Cache', 'EDGE-HIT');
+      return new Response(cachedImage.body, {
+        status: cachedImage.status,
+        statusText: cachedImage.statusText,
+        headers: cachedHeaders,
+      });
+    }
+  }
 
   if (matchedPrefix && env.DB && ctx?.waitUntil && isPlaybackInfo) {
     const todayStr = new Date(Date.now() + 8 * 3600000).toISOString().split('T')[0];
@@ -765,6 +796,19 @@ async function proxyDirectUrl(request, env, ctx, upstreamUrls, opts = {}) {
     responseHeaders.set('X-Served-By', request.cf?.colo || 'Unknown');
   }
 
+  if (shouldCacheImage && finalResponse.status === 200 && (finalResponse.headers.get('content-type') || '').startsWith('image/')) {
+    responseHeaders.set('Cache-Control', `public, max-age=${IMAGE_CACHE_TTL_SECONDS}`);
+    responseHeaders.set('X-Cache', 'EDGE-MISS');
+    const cacheableImage = new Response(finalResponse.body, {
+      status: finalResponse.status,
+      statusText: finalResponse.statusText,
+      headers: responseHeaders,
+    });
+    ctx.waitUntil(caches.default.put(imageCacheKey, cacheableImage.clone()));
+    return cacheableImage;
+  }
+
+  responseHeaders.set('X-Cache', 'BYPASS');
   return new Response(finalResponse.body, {
     status: finalResponse.status,
     statusText: finalResponse.statusText,
