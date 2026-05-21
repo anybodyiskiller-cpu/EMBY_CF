@@ -3,9 +3,6 @@ main = "worker.js"
 compatibility_date = "2025-05-15"
 compatibility_flags = ["nodejs_compat"]
 
-[placement]
-mode = "smart"
-
 [[routes]]
 pattern = "media.anybodyiskiller.shop"
 custom_domain = true
