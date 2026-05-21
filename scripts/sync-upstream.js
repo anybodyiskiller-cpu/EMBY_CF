@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 
-const upstreamBase = 'https://raw.githubusercontent.com/Dirige/EMBY_CF/main';
+const upstreamBase = 'https://raw.githubusercontent.com/Dirige/EMBY_CF/trae/solo';
 
 const localDeploy = `# Deploy
 
@@ -91,12 +91,12 @@ const jsonRewriteHelper = `function rewriteJsonUrls(value, upstreamOrigin, proxy
   return { data: walk(value), modified };
 }`;
 
-const jsonRewriteBlock = `if (!compatMode && finalResponse.status === 200 && contentType.includes('json') && matchedPrefix) {
+const jsonRewriteBlock = `if (!compatMode && finalResponse.status === 200 && (finalResponse.headers.get('content-type') || '').includes('json') && matchedPrefix) {
     const urlPath = lastUpstreamUrl.pathname.toLowerCase();
     try {
       const data = await finalResponse.clone().json();
       let modified = false;
-      const proxyBase = proxyOrigin + safePrefix;
+      const proxyBase = new URL(request.url).origin + '/' + matchedPrefix;
 
       const httpRewrite = rewriteJsonUrls(data, lastUpstreamUrl.origin.replace(/^https:/, 'http:'), proxyBase);
       const httpsRewrite = rewriteJsonUrls(httpRewrite.data, lastUpstreamUrl.origin.replace(/^http:/, 'https:'), proxyBase);
@@ -110,11 +110,11 @@ const jsonRewriteBlock = `if (!compatMode && finalResponse.status === 200 && con
                 const mediaUrl = new URL(source[key]);
                 const isDirectDomain = MANUAL_REDIRECT_DOMAINS.some(d => mediaUrl.hostname.endsWith(d));
                 if (!isDirectDomain) {
-                  source[key] = proxyOrigin + safePrefix + '/' + source[key];
+                  source[key] = proxyBase + '/' + source[key];
                   modified = true;
                 }
               } catch (_) {
-                source[key] = proxyOrigin + safePrefix + '/' + source[key];
+                source[key] = proxyBase + '/' + source[key];
                 modified = true;
               }
             }
@@ -207,6 +207,7 @@ function patchWorker(source) {
 
   const textReplacements = [
     ['<title>Emby 反代 | 智能优选</title>', '<title>Media Gateway | 智能优选</title>'],
+    ['<title>Emby 反代 | 自动测速优选</title>', '<title>Media Gateway | 自动测速优选</title>'],
     ['<h1>Emby 反向代理</h1>', '<h1>Media Gateway</h1>'],
     ['https://你的域名/https://emby.example.com:8096', 'https://你的域名/https://origin.example.com:8096'],
     ['placeholder="例如：我的 Emby 服务器"', 'placeholder="例如：主线路"'],
@@ -233,11 +234,16 @@ function patchWorker(source) {
     worker = worker.replace(normalizeFn, `${normalizeFn}\n\n${jsonRewriteHelper}`);
   }
 
-  worker = replaceBalancedBlock(
-    worker,
-    "if (!compatMode && finalResponse.status === 200 && contentType.includes('json') && matchedPrefix) {",
-    jsonRewriteBlock,
-  );
+  const oldJsonMarker = "if (!compatMode && finalResponse.status === 200 && contentType.includes('json') && matchedPrefix) {";
+  if (worker.includes(oldJsonMarker)) {
+    worker = replaceBalancedBlock(worker, oldJsonMarker, jsonRewriteBlock);
+  } else {
+    const responseMarker = '\n  if (isPlaying || isPlaybackInfo) {';
+    if (!worker.includes(responseMarker)) {
+      throw new Error('Response header marker changed upstream; update sync patcher.');
+    }
+    worker = worker.replace(responseMarker, `\n  ${jsonRewriteBlock}\n${responseMarker}`);
+  }
 
   return worker;
 }
