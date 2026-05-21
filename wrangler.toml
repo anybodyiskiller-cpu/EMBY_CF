@@ -3,10 +3,16 @@ main = "worker.js"
 compatibility_date = "2025-05-15"
 compatibility_flags = ["nodejs_compat"]
 
+[[routes]]
+pattern = "media.anybodyiskiller.shop"
+custom_domain = true
+
 [vars]
 BASE_DOMAIN = "anybodyiskiller.shop"
+CF_ZONE_ID = "82068595bcd648d74ddcb168ed1557e2"
+CF_ACCOUNT_ID = "a51f1948ebae31220a0466c69d97702f"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "media-store"
-database_id = "dfff5cd4-1df8-4b31-b9f8-d48bd9729566"
+database_id = "a4e3830c-ffe3-4aef-a8ec-2321a5c32370"
